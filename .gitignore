@@ -1,0 +1,21 @@
+# Secrets & credentials
+.env
+*.env
+*.key
+*.pem
+*.token
+
+# Backup files
+*.save
+*.bak
+*.backup
+
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Runtime artifacts
+/tmp/
