@@ -1,0 +1,80 @@
+{
+  "name": "Daily Infrastructure Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] }
+      },
+      "id": "cron-trigger",
+      "name": "Daily 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://172.20.0.1:9100/metrics",
+        "options": {}
+      },
+      "id": "node-exporter",
+      "name": "Fetch Node Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "create",
+        "modelId": "claude-3-5-haiku-20241022",
+        "messages": {
+          "values": [
+            {
+              "content": "Summarize the following Prometheus node-exporter metrics into a brief 3-bullet daily health digest. Focus on CPU, memory, disk. Metrics:\\n\\n{{ $json.data.substring(0, 3000) }}"
+            }
+          ]
+        },
+        "options": { "maxTokens": 512 }
+      },
+      "id": "ai-summarise",
+      "name": "AI Summarize",
+      "type": "@n8n/n8n-nodes-langchain.lmAnthropicMessages",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "credentials": {
+        "anthropicApi": { "id": "anthropic-creds", "name": "Anthropic API" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://notify.theblackagency.cloud/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Gotify-Key", "value": "={{ $vars.GOTIFY_DIGEST_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "title", "value": "📊 Daily Infra Digest — {{ $now.format('MMM D') }}" },
+            { "name": "message", "value": "={{ $json.content[0].text }}" },
+            { "name": "priority", "value": "3" }
+          ]
+        }
+      },
+      "id": "send-digest",
+      "name": "Send Digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Daily 08:00": { "main": [[{ "node": "Fetch Node Metrics", "type": "main", "index": 0 }]] },
+    "Fetch Node Metrics": { "main": [[{ "node": "AI Summarize", "type": "main", "index": 0 }]] },
+    "AI Summarize": { "main": [[{ "node": "Send Digest", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

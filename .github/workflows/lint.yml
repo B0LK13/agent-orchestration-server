@@ -1,0 +1,26 @@
+name: ShellCheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: warning
+          ignore_paths: >
+            backup.sh.save
+          additional_files: "*.sh"
+        env:
+          SHELLCHECK_OPTS: >
+            -e SC1091
+            -e SC2034

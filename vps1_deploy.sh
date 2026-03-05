@@ -20,7 +20,7 @@ fi
 
 # Create directory structure
 echo "=== Creating directory structure ==="
-mkdir -p $SCRIPT_DIR/{n8n/{data,files},postgres/data,redis/data,uptime-kuma,gotify,miniflux,loki/{config,data},promtail/config,cloudflared,backups}
+mkdir -p $SCRIPT_DIR/{n8n/{data,files},postgres/data,redis/data,uptime-kuma,gotify,miniflux,loki/{config,data},promtail/config,grafana/{data,provisioning/{datasources,dashboards}},cloudflared,backups}
 chown -R deploy:deploy $SCRIPT_DIR
 chmod 750 $SCRIPT_DIR
 chmod 700 $SCRIPT_DIR/backups
@@ -31,14 +31,12 @@ echo "=== Generating secure passwords ==="
 POSTGRES_PASSWORD=$(openssl rand -base64 32)
 REDIS_PASSWORD=$(openssl rand -base64 32)
 N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
-GOTIFY_PASSWORD=$(openssl rand -base64 16)
-MINIFLUX_PASSWORD=$(openssl rand -base64 16)
-N8N_BASIC_AUTH_PASSWORD=$(openssl rand -base64 16)
+GRAFANA_PASSWORD=$(openssl rand -base64 16)
 
 # Create .env file
 cat > $SCRIPT_DIR/.env << EOF
-# Cloudflare Tunnel Token (you'll need to fill this in)
-CLOUDFLARE_TUNNEL_TOKEN=467ebd8a-4971-48af-9286-0e7c6414fa31
+# Cloudflare Tunnel Token — fill in before starting services
+CLOUDFLARE_TUNNEL_TOKEN=YOUR_TUNNEL_TOKEN_HERE
 
 # Database Configuration
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
@@ -66,9 +64,22 @@ GOTIFY_DEFAULT_PASS=$GOTIFY_PASSWORD
 # Miniflux Configuration
 MINIFlux_ADMIN_USERNAME=admin
 MINIFLUX_ADMIN_PASSWORD=$MINIFLUX_PASSWORD
+
+# Grafana Configuration
+GRAFANA_PASSWORD=$GRAFANA_PASSWORD
 EOF
 
 chmod 600 $SCRIPT_DIR/.env
+
+# Validate Cloudflare token was set
+if grep -q "YOUR_TUNNEL_TOKEN_HERE" "$SCRIPT_DIR/.env"; then
+    echo ""
+    echo "❌ ERROR: Cloudflare tunnel token is not set!"
+    echo "   Edit $SCRIPT_DIR/.env and replace YOUR_TUNNEL_TOKEN_HERE with your real token."
+    echo "   Get your token at: https://one.dash.cloudflare.com/ → Networks → Tunnels"
+    rm -f "$SCRIPT_DIR/.env"
+    exit 1
+fi
 echo "✓ Environment file created at $SCRIPT_DIR/.env"
 echo "⚠️  IMPORTANT: Edit .env and add your Cloudflare tunnel token!"
 
@@ -303,6 +314,31 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_SERVER_ROOT_URL=https://metrics.theblackagency.cloud
+      - GF_SERVER_DOMAIN=metrics.theblackagency.cloud
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - automation
+    ports:
+      - "127.0.0.1:3000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
@@ -394,9 +430,34 @@ EOF
 
 echo "✓ Promtail config created"
 
+# Create Grafana Loki datasource provisioning
+echo "=== Creating Grafana provisioning ==="
+cat > $SCRIPT_DIR/grafana/provisioning/datasources/loki.yaml << 'EOF'
+apiVersion: 1
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    editable: false
+EOF
+
+echo "✓ Grafana provisioning created"
+
 # Set ownership
 chown -R deploy:deploy $SCRIPT_DIR
 chmod 600 $SCRIPT_DIR/.env
+
+# Validate Cloudflare token was set
+if grep -q "YOUR_TUNNEL_TOKEN_HERE" "$SCRIPT_DIR/.env"; then
+    echo ""
+    echo "❌ ERROR: Cloudflare tunnel token is not set!"
+    echo "   Edit $SCRIPT_DIR/.env and replace YOUR_TUNNEL_TOKEN_HERE with your real token."
+    echo "   Get your token at: https://one.dash.cloudflare.com/ → Networks → Tunnels"
+    rm -f "$SCRIPT_DIR/.env"
+    exit 1
+fi
 
 echo ""
 echo "========================================"
@@ -411,6 +472,7 @@ echo "   - https://n8n.theblackagency.cloud"
 echo "   - https://status.theblackagency.cloud"
 echo "   - https://notify.theblackagency.cloud"
 echo "   - https://rss.theblackagency.cloud"
+echo "   - https://metrics.theblackagency.cloud"
 echo ""
 echo "Default credentials saved in: $SCRIPT_DIR/.env"
 echo ""

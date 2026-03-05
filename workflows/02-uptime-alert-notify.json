@@ -1,0 +1,95 @@
+{
+  "name": "Uptime Kuma → Gotify Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "uptime-alert",
+        "options": {}
+      },
+      "id": "uptime-webhook",
+      "name": "Uptime Kuma Alert",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "is-down",
+              "leftValue": "={{ $json.heartbeat.status }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-down",
+      "name": "Is Down?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://notify.theblackagency.cloud/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Gotify-Key", "value": "={{ $vars.GOTIFY_ALERT_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "title", "value": "🔴 DOWN: {{ $json.monitor.name }}" },
+            { "name": "message", "value": "={{ $json.monitor.name }} is DOWN\\nURL: {{ $json.monitor.url }}\\nTime: {{ $json.heartbeat.time }}\\nMessage: {{ $json.heartbeat.msg }}" },
+            { "name": "priority", "value": "9" }
+          ]
+        }
+      },
+      "id": "gotify-down",
+      "name": "Notify Down",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://notify.theblackagency.cloud/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Gotify-Key", "value": "={{ $vars.GOTIFY_ALERT_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "title", "value": "✅ RECOVERED: {{ $json.monitor.name }}" },
+            { "name": "message", "value": "={{ $json.monitor.name }} is back UP\\nURL: {{ $json.monitor.url }}\\nDowntime: {{ $json.heartbeat.duration }}s" },
+            { "name": "priority", "value": "5" }
+          ]
+        }
+      },
+      "id": "gotify-up",
+      "name": "Notify Recovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 400]
+    }
+  ],
+  "connections": {
+    "Uptime Kuma Alert": { "main": [[{ "node": "Is Down?", "type": "main", "index": 0 }]] },
+    "Is Down?": {
+      "main": [
+        [{ "node": "Notify Down", "type": "main", "index": 0 }],
+        [{ "node": "Notify Recovery", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,93 @@
+{
+  "name": "Webhook → AI Agent Dispatch",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-task",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Receive Task",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "task",
+              "name": "task",
+              "value": "={{ $json.task }}",
+              "type": "string"
+            },
+            {
+              "id": "agent",
+              "name": "agent",
+              "value": "={{ $json.agent ?? 'claude' }}",
+              "type": "string"
+            },
+            {
+              "id": "context",
+              "name": "context",
+              "value": "={{ $json.context ?? '' }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "extract-params",
+      "name": "Extract Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "create",
+        "modelId": "claude-3-5-sonnet-20241022",
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.context ? 'Context: ' + $json.context + '\\n\\n' : '' }}Task: {{ $json.task }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4096,
+          "system": "You are an AI agent for theblackagency.cloud infrastructure. Be concise and precise."
+        }
+      },
+      "id": "claude-agent",
+      "name": "Claude Agent",
+      "type": "@n8n/n8n-nodes-langchain.lmAnthropicMessages",
+      "typeVersion": 1,
+      "position": [680, 200],
+      "credentials": {
+        "anthropicApi": { "id": "anthropic-creds", "name": "Anthropic API" }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, agent: $('Extract Parameters').item.json.agent, result: $json.content[0].text, timestamp: new Date().toISOString() }) }}"
+      },
+      "id": "respond",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Receive Task": { "main": [[{ "node": "Extract Parameters", "type": "main", "index": 0 }]] },
+    "Extract Parameters": { "main": [[{ "node": "Claude Agent", "type": "main", "index": 0 }]] },
+    "Claude Agent": { "main": [[{ "node": "Return Result", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

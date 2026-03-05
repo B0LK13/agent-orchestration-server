@@ -38,11 +38,20 @@ HOSTNAMES=(
   "ssh"
   "terminal"
   "files"
-  # Automation stack
+  # VPS-1: Automation stack
   "n8n"
   "status"
   "notify"
   "rss"
+  "metrics"
+  # VPS-2: Workspace stack
+  "code"
+  "git"
+  "docker"
+  # VPS-3: Dev / AI stack
+  "ai"
+  "trace"
+  "vectors"
 )
 
 provision_cname() {
